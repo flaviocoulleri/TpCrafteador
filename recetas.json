@@ -1,0 +1,60 @@
+[
+  {
+    "resultado": "antorcha",
+    "cantidadResultado": 3,
+    "ingredientes": [
+      { "elemento": "baston", "cantidad": 4 },
+      { "elemento": "carbon", "cantidad": 1 }
+    ],
+    "tipo": "fuego",
+    "tiempo": 6
+  },
+  {
+    "resultado": "baston",
+    "cantidadResultado": 1,
+    "ingredientes": [
+      { "elemento": "madera", "cantidad": 2 }
+    ],
+    "tipo": "agua",
+    "tiempo": 2
+  },
+  {
+    "resultado": "mesa",
+    "cantidadResultado": 1,
+    "ingredientes": [
+      { "elemento": "madera", "cantidad": 4 }
+    ],
+    "tipo": "aire",
+    "tiempo": 4
+  },
+  {
+    "resultado": "pico",
+    "cantidadResultado": 1,
+    "ingredientes": [
+      { "elemento": "baston", "cantidad": 2 },
+      { "elemento": "piedra", "cantidad": 3 }
+    ],
+    "tipo": "tierra",
+    "tiempo": 8
+  },
+  {
+    "resultado": "espada",
+    "cantidadResultado": 1,
+    "ingredientes": [
+      { "elemento": "baston", "cantidad": 1 },
+      { "elemento": "lingote", "cantidad": 2 }
+    ],
+    "tipo": "fuego",
+    "tiempo": 5
+  },
+  {
+    "resultado": "lingote",
+    "cantidadResultado": 1,
+    "ingredientes": [
+      { "elemento": "mineral", "cantidad": 3 },
+      { "elemento": "carbon", "cantidad": 1 }
+    ],
+    "tipo": "fuego",
+    "tiempo": 7
+  }
+]

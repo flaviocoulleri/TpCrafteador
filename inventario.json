@@ -1,0 +1,6 @@
+[
+  { "elemento": "madera", "cantidad": 1 },
+  { "elemento": "carbon", "cantidad": 2 },
+  { "elemento": "mineral", "cantidad": 4 },
+  { "elemento": "baston", "cantidad": 1 }
+]
