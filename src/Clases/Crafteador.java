@@ -20,44 +20,12 @@ public class Crafteador {
     public Recetario getRecetario() {
         return recetario;
     }
-
-    // Métodos existentes...
     
-    /**
-     * Devuelve el mapa de ingredientes simples necesarios para craftear `cantidad` unidades del `objetivo`.
-     * Recorre recursivamente sub-recetas.
-     */
-    public Map<ElementoSimple, Integer> calcularIngredientesBasicos(Elemento objetivo, int cantidad) {
-        Map<ElementoSimple, Integer> resultado = new HashMap<>();
-
-        if (objetivo.esSimple()) {
-            ElementoSimple simple = (ElementoSimple) objetivo;
-            resultado.put(simple, cantidad);
-            return resultado;
-        }
-
-        Receta receta = recetario.obtenerReceta((ElementoComplejo) objetivo);
-        if (receta == null) {
-            throw new IllegalArgumentException("No hay receta para: " + objetivo.getNombre());
-        }
-
-        int cantidadPorReceta = receta.getCantidadResultado();
-        int veces = (int) Math.ceil(cantidad / (double) cantidadPorReceta);
-
-        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
-            Elemento ingrediente = entry.getKey();
-            int cantidadTotal = entry.getValue() * veces;
-
-            Map<ElementoSimple, Integer> subIngredientes = calcularIngredientesBasicos(ingrediente, cantidadTotal);
-            for (Map.Entry<ElementoSimple, Integer> subEntry : subIngredientes.entrySet()) {
-                resultado.merge(subEntry.getKey(), subEntry.getValue(), Integer::sum);
-            }
-        }
-
-        return resultado;
+    public List<RegistroCrafteo> getHistorial(){
+    	return historial;
     }
 
-    /**
+      /**
      * Devuelve la receta asociada a un ElementoComplejo, o null si no existe.
      */
     public Receta getReceta(ElementoComplejo objetivo) {
@@ -67,10 +35,42 @@ public class Crafteador {
         }
         return receta;
     }
+
+
+    /**
+     * 1. Devuelve los ingredientes directos necesarios para craftear el objeto.
+     */
+    public Resultado calcularIngredientesDirectos(ElementoComplejo objetivo, int cantidad) {
+        Receta receta = recetario.obtenerReceta(objetivo);
+        if (receta == null) {
+            throw new IllegalArgumentException("No hay receta para: " + objetivo.getNombre());
+        }
+
+        Map<Elemento, Integer> ingredientesDirectos = new HashMap<>();
+        int cantidadPorReceta = receta.getCantidadResultado();
+        int veces = (int) Math.ceil(cantidad / (double) cantidadPorReceta);
+
+        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
+            ingredientesDirectos.put(entry.getKey(), entry.getValue() * veces);
+        }
+
+        int tiempoTotal = receta.getTiempo() * veces;
+
+        return new Resultado(objetivo.getNombre(), tiempoTotal, cantidad, ingredientesDirectos);
+    }
     
-    // Métodos "Qué me falta para..."
-    
-    public Map<Elemento, Integer> ingredientesDirectosFaltantes(ElementoComplejo objetivo, int cantidad, Inventario inventario) {
+    /**
+     * 2. Devuelve el mapa de ingredientes simples necesarios para craftear `cantidad` unidades del `objetivo`.
+     * Recorre recursivamente sub-recetas.
+     */
+    public Resultado calcularIngredientesBasicos(Elemento objetivo, int cantidad) {
+        return calcularIngredientesBasicosInterno(objetivo, cantidad);
+    }
+
+    /**
+     * 3. Devuelve los ingredientes directos faltantes para craftear el objeto.
+     */
+    public Resultado calcularIngredientesDirectosFaltantes(ElementoComplejo objetivo, int cantidad, Inventario inventario) {
         Receta receta = recetario.obtenerReceta(objetivo);
         if (receta == null) {
             throw new IllegalArgumentException("No hay receta para: " + objetivo.getNombre());
@@ -80,130 +80,52 @@ public class Crafteador {
         int cantidadPorReceta = receta.getCantidadResultado();
         int veces = (int) Math.ceil(cantidad / (double) cantidadPorReceta);
 
+        int tiempoTotal = receta.getTiempo() * veces;
+
         for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
             Elemento ingrediente = entry.getKey();
             int necesario = entry.getValue() * veces;
             int disponible = inventario.getCantidad(ingrediente);
 
             if (disponible < necesario) {
-                faltantes.put(ingrediente, necesario - disponible);
+                int cantidadFaltante = necesario - disponible;
+                faltantes.put(ingrediente, cantidadFaltante);
             }
         }
 
-        return faltantes;
+        return new Resultado(objetivo.getNombre(), tiempoTotal, cantidad, faltantes);
     }
 
-    public Map<ElementoSimple, Integer> ingredientesBasicosFaltantes(Elemento objetivo, int cantidad, Inventario inventario) {
-        Map<ElementoSimple, Integer> resultado = new HashMap<>();
-
-        // Si es simple, solo resta verificar cuánto falta
-        if (objetivo.esSimple()) {
-            ElementoSimple simple = (ElementoSimple) objetivo;
-            int enInventario = inventario.getCantidad(simple);
-            int faltante = cantidad - enInventario;
-            if (faltante > 0) {
-                resultado.put(simple, faltante);
-            }
-            return resultado;
-        }
-
-        // Es complejo
-        ElementoComplejo complejo = (ElementoComplejo) objetivo;
-        int yaDisponible = inventario.getCantidad(complejo);
-        int cantidadAFabricar = cantidad - yaDisponible;
-
-        if (cantidadAFabricar <= 0) {
-            return resultado; // No hace falta fabricar
-        }
-
-        Receta receta = recetario.obtenerReceta(complejo);
-        if (receta == null) {
-            throw new IllegalArgumentException("No hay receta para: " + complejo.getNombre());
-        }
-
-        int cantidadPorReceta = receta.getCantidadResultado();
-        int veces = (int) Math.ceil(cantidadAFabricar / (double) cantidadPorReceta);
-
-        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
-            Elemento ingrediente = entry.getKey();
-            int total = entry.getValue() * veces;
-
-            // Llamada recursiva para descomponer el ingrediente
-            Map<ElementoSimple, Integer> sub = ingredientesBasicosFaltantes(ingrediente, total, inventario);
-
-            for (Map.Entry<ElementoSimple, Integer> e : sub.entrySet()) {
-                resultado.merge(e.getKey(), e.getValue(), Integer::sum);
-            }
-        }
-
-        return resultado;
-    }
-
-    public int cuantosPuedoCraftear(ElementoComplejo objeto, Inventario inventario) {
-        // Crear una copia del inventario para simular el proceso
-        Inventario inventarioSimulado = new Inventario(new HashMap<>(inventario.getMapa()));
-        return calcularMaximoCrafteable(objeto, inventarioSimulado);
-    }
-    
-    private int calcularMaximoCrafteable(ElementoComplejo objeto, Inventario inventario) {
-        Receta receta = recetario.obtenerReceta(objeto);
-        if (receta == null) {
-            return 0; // No se puede craftear
-        }
-        
-        int maxPosible = Integer.MAX_VALUE; // Iniciar con el valor máximo posible
-        
-        // Para cada ingrediente, calcular cuántas veces podemos satisfacerlo
-        for (Map.Entry<Elemento, Integer> ingrediente : receta.getIngredientes().entrySet()) {
-            Elemento elemento = ingrediente.getKey();
-            int cantidadNecesaria = ingrediente.getValue();
-            
-            int disponible = calcularDisponibilidadTotal(elemento, inventario);
-            int vecesPosibles = disponible / cantidadNecesaria;
-            
-            maxPosible = Math.min(maxPosible, vecesPosibles);
-        }
-        
-        // Considerar la cantidad que produce cada ejecución de la receta
-        return maxPosible * receta.getCantidadResultado();
-    }
-    
-    private int calcularDisponibilidadTotal(Elemento elemento, Inventario inventario) {
-        if (elemento.esSimple()) {
-            return inventario.getCantidad(elemento);
-        }
-        
-        ElementoComplejo complejo = (ElementoComplejo) elemento;
-        
-        // Cantidad directa en inventario
-        int cantidadDirecta = inventario.getCantidad(complejo);
-        
-        // Cantidad que puedo fabricar con los ingredientes disponibles
-        int cantidadFabricable = calcularMaximoCrafteable(complejo, inventario);
-        
-        return cantidadDirecta + cantidadFabricable;
-    }
-
-    // NUEVOS MÉTODOS PARA EL PUNTO 6
 
     /**
-     * Realiza el crafteo del objeto especificado, modificando el inventario.
+     * 4. Devuelve los ingredientes básicos faltantes para craftear el objeto desde cero.
+     */
+    public Resultado calcularIngredientesBasicosFaltantes(Elemento objetivo, int cantidad, Inventario inventario) {
+        return ingredientesBasicosFaltantesInterno(objetivo, cantidad, inventario);
+    }
+
+    /**
+     * 5. Calcula cuántos objetos se pueden craftear con el inventario actual.
+     */
+    public Resultado cuantosPuedoCraftear(ElementoComplejo objeto, Inventario inventario) {
+        return cuantosPuedoCraftearInterno(objeto, inventario);
+    }
+
+    /**
+     * 6. Realiza el crafteo del objeto especificado, modificando el inventario.
      * Retorna un ResultadoCrafteo con información del proceso.
      */
-    public ResultadoCrafteo craftear(ElementoComplejo objeto, int cantidad, Inventario inventario) {
+    public Resultado craftear(ElementoComplejo objeto, int cantidad, Inventario inventario) {
         // 1. Verificar si es posible el crafteo
-        int maximoPosible = cuantosPuedoCraftear(objeto, inventario);
-        if (maximoPosible < cantidad) {
-            return new ResultadoCrafteo(false, 0, 0, 
-                "No se puede craftear " + cantidad + " unidades de " + objeto.getNombre() + 
-                ". Máximo posible: " + maximoPosible);
+        Resultado maximoPosible = cuantosPuedoCraftearInterno(objeto, inventario);
+        if (maximoPosible.getCantidad() < cantidad) {
+            return new Resultado(objeto.getNombre(), 0, 0, null);
         }
 
         // 2. Realizar el crafteo
             int tiempoTotal = ejecutarCrafteo(objeto, cantidad, inventario);
-        
-        return new ResultadoCrafteo(true, cantidad, tiempoTotal, 
-            "Crafteo exitoso: " + cantidad + " x " + objeto.getNombre());
+
+        return new Resultado(objeto.getNombre(), tiempoTotal, cantidad, null);
     }
 
     /**
@@ -285,14 +207,6 @@ public class Crafteador {
                 // Craftear el ingrediente intermedio
                 tiempoEmpleado += ejecutarCrafteo(complejo, cantidad, inventario);
                 
-                // Después de craftear, consumir exactamente lo que necesito
-                // Calcular cuánto se produjo realmente
-                // Receta recetaIntermedia = recetas.get(complejo);
-                // int cantidadPorReceta = recetaIntermedia.getCantidadResultado();
-                // int ejecucionesRealizadas = (int) Math.ceil((double) cantidad / cantidadPorReceta);
-                // int cantidadProducida = ejecucionesRealizadas * cantidadPorReceta;
-                
-                // Consumir solo lo que necesito
                 inventario.consumir(complejo, cantidad);
             }
         }
@@ -312,18 +226,188 @@ public class Crafteador {
 
         for (int i = 0; i < historial.size(); i++) {
             RegistroCrafteo registro = historial.get(i);
-            System.out.println((registro.getTurno()) + ". " +
-                " - " + registro.getReceta().getResultado().getNombre() + 
-                " (x" + registro.getReceta().getCantidadResultado() + ")");
-            
-            // Mostrar ingredientes consumidos
+            Receta receta = registro.getReceta();
+            String nombre = receta.getResultado().getNombre();
+            int cantidad = receta.getCantidadResultado();
+            int tiempo = receta.getTiempo();
+
+            System.out.println(registro.getTurno() + ". " + nombre + " (x" + cantidad + ") - ⏱ " + tiempo + "s");
             System.out.println("   Ingredientes consumidos:");
             for (Map.Entry<Elemento, Integer> ingrediente : registro.getIngredientesConsumidos().entrySet()) {
                 System.out.println("   - " + ingrediente.getKey().getNombre() + ": " + ingrediente.getValue());
             }
-            System.out.println(); // Línea en blanco para separar registros
+            System.out.println();
         }
     }
+
+        
+    // ====== MÉTODOS INTERNOS (PRIVADOS) ======
+
+    /**
+     * Método interno para calcular ingredientes básico.
+     */
+    private Resultado calcularIngredientesBasicosInterno(Elemento objetivo, int cantidad) {
+        Map<Elemento, Integer> ingTotales = new HashMap<>();
+        int tiempoTotal = 0;
+        if (objetivo.esSimple()) {
+            ElementoSimple simple = (ElementoSimple) objetivo;
+            ingTotales.put(simple, cantidad);
+            return new Resultado(simple.getNombre(), 0, cantidad, ingTotales);
+        }
+
+        Receta receta = recetario.obtenerReceta((ElementoComplejo) objetivo);
+        if (receta == null) {
+            throw new IllegalArgumentException("No hay receta para: " + objetivo.getNombre());
+        }
+
+        int cantidadPorReceta = receta.getCantidadResultado();
+        int veces = (int) Math.ceil(cantidad / (double) cantidadPorReceta);
+
+        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
+            Elemento ingrediente = entry.getKey();
+            int cantidadTotal = entry.getValue() * veces;
+
+            Resultado subResultado = calcularIngredientesBasicosInterno(ingrediente, cantidadTotal);
+            tiempoTotal += subResultado.getTiempoTotal();
+            for (Map.Entry<Elemento, Integer> subEntry : subResultado.getIngredientes().entrySet()) {
+                ingTotales.merge(subEntry.getKey(), subEntry.getValue(), Integer::sum);
+            }
+        }
+        tiempoTotal += receta.getTiempo() * veces;
+        return new Resultado(objetivo.getNombre(), tiempoTotal, cantidad, ingTotales);
+    }
+
+    /**
+     * Método interno para calcular ingredientes básicos faltantes.
+     */
+    private Resultado ingredientesBasicosFaltantesInterno(Elemento objetivo, int cantidad, Inventario inventario) {
+        Map<Elemento, Integer> resultado = new HashMap<>();
+        int tiempoTotal = 0;
+
+        if (objetivo.esSimple()) {
+            ElementoSimple simple = (ElementoSimple) objetivo;
+            int enInventario = inventario.getCantidad(simple);
+            int faltante = cantidad - enInventario;
+            if (faltante > 0) {
+                resultado.put(simple, faltante);
+            }
+            return new Resultado(simple.getNombre(), 0, faltante, resultado);
+        }
+
+        ElementoComplejo complejo = (ElementoComplejo) objetivo;
+        int yaDisponible = inventario.getCantidad(complejo);
+        int cantidadAFabricar = cantidad - yaDisponible;
+
+        if (cantidadAFabricar <= 0) {
+            return new Resultado(complejo.getNombre(), 0, 0, resultado);
+        }
+
+        Receta receta = recetario.obtenerReceta(complejo);
+        if (receta == null) {
+            throw new IllegalArgumentException("No hay receta para: " + complejo.getNombre());
+        }
+
+        int cantidadPorReceta = receta.getCantidadResultado();
+        int veces = (int) Math.ceil(cantidadAFabricar / (double) cantidadPorReceta);
+
+        tiempoTotal += receta.getTiempo() * veces;
+        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
+            Elemento ingrediente = entry.getKey();
+            int total = entry.getValue() * veces;
+
+            Resultado sub = ingredientesBasicosFaltantesInterno(ingrediente, total, inventario);
+            tiempoTotal += sub.getTiempoTotal();
+            for (Map.Entry<Elemento, Integer> e : sub.getIngredientes().entrySet()) {
+                resultado.merge(e.getKey(), e.getValue(), Integer::sum);
+            }
+        }
+
+        return new Resultado(complejo.getNombre(), tiempoTotal, cantidad, resultado);
+    }
+
+    /**
+     * Método interno para calcular cuántos se pueden craftear.
+     */
+    private Resultado cuantosPuedoCraftearInterno(ElementoComplejo objeto, Inventario inventario) {
+        Inventario inventarioSimulado = new Inventario(new HashMap<>(inventario.getMapa()));
+        Resultado res = calcularMaximoCrafteable(objeto, inventarioSimulado);
+        if(res.getCantidad() == 0) {
+            return new Resultado(objeto.getNombre(), 0, 0, null); // No se puede craftear
+        }
+        return res;
+    }
+
+    private Resultado calcularMaximoCrafteable(ElementoComplejo objeto, Inventario inventario) {
+        int tiempoTotal = 0;
+        Receta receta = recetario.obtenerReceta(objeto);
+        if (receta == null) {
+            return new Resultado(objeto.getNombre(), 0, 0, null); // No se puede craftear
+        }
+        
+        int maxPosible = Integer.MAX_VALUE; // Iniciar con el valor máximo posible
+        
+        // Para cada ingrediente, calcular cuántas veces podemos satisfacerlo
+        for (Map.Entry<Elemento, Integer> ingrediente : receta.getIngredientes().entrySet()) {
+            Elemento elemento = ingrediente.getKey();
+            int cantidadNecesaria = ingrediente.getValue();
+            
+            Resultado disponible = calcularDisponibilidadTotal(elemento, inventario);
+            tiempoTotal += disponible.getTiempoTotal();
+            int vecesPosibles = disponible.getCantidad() / cantidadNecesaria;
+
+            maxPosible = Math.min(maxPosible, vecesPosibles);
+        }
+
+        tiempoTotal += receta.getTiempo() * maxPosible;
+        // Considerar la cantidad que produce cada ejecución de la receta
+        return new Resultado(objeto.getNombre(), tiempoTotal, maxPosible * receta.getCantidadResultado(), null);
+    }
+    
+    private Resultado calcularDisponibilidadTotal(Elemento elemento, Inventario inventario) {
+        if (elemento.esSimple()) {
+            return new Resultado(elemento.getNombre(), 0, inventario.getCantidad(elemento), null);
+        }
+        
+        ElementoComplejo complejo = (ElementoComplejo) elemento;
+        
+        // Cantidad directa en inventario
+        int cantidadDirecta = inventario.getCantidad(complejo);
+        
+        // Cantidad que puedo fabricar con los ingredientes disponibles
+        Resultado subRes = calcularMaximoCrafteable(complejo, inventario);
+
+        return new Resultado(complejo.getNombre(), subRes.getTiempoTotal(), cantidadDirecta + subRes.getCantidad(), null);
+    }
+
+
+    /**
+     * Calcula el tiempo total necesario para craftear un objeto de forma recursiva.
+     */
+    /* private int calcularTiempoTotal(Elemento objetivo, int cantidad) {
+        if (objetivo.esSimple()) {
+            return 0; // Los elementos simples no requieren tiempo de crafteo
+        }
+
+        ElementoComplejo complejo = (ElementoComplejo) objetivo;
+        Receta receta = recetario.obtenerReceta(complejo);
+        if (receta == null) {
+            return 0;
+        }
+
+        int cantidadPorReceta = receta.getCantidadResultado();
+        int veces = (int) Math.ceil(cantidad / (double) cantidadPorReceta);
+        
+        int tiempoTotal = receta.getTiempo() * veces; // Tiempo del objeto actual
+
+        // Sumar tiempos de ingredientes intermedios
+        for (Map.Entry<Elemento, Integer> entry : receta.getIngredientes().entrySet()) {
+            Elemento ingrediente = entry.getKey();
+            int cantidadIngrediente = entry.getValue() * veces;
+            tiempoTotal += calcularTiempoTotal(ingrediente, cantidadIngrediente);
+        }
+
+        return tiempoTotal;
+    } */
 
     /**
      * Clase interna para encapsular el resultado de un crafteo.
